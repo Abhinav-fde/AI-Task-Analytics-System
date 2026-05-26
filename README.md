@@ -316,4 +316,4 @@ CORS_ORIGIN=http://localhost:4200
 
 ---
 
-**Built for production. Designed for interviews.** 🚀
+**Built for production** 
