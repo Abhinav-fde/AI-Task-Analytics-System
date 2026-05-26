@@ -5,11 +5,11 @@
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                                    CLIENT (Angular 17)                         │
-│  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │  TaskListComponent (Dashboard)                                           │   │
-│  │                                                                          │   │
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                  CLIENT (Angular 17)                             │
+│  ┌───────────────────────────────────────────────────────────────────────────┐   │
+│  │  TaskListComponent (Dashboard)                                            │   │
+│  │                                                                            │   │
 │  │  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐    │   │
 │  │  │  TaskStateService │    │ WebsocketService │    │  Angular Signals │    │   │
 │  │  │                   │    │                  │    │                  │    │   │
@@ -17,64 +17,62 @@
 │  │  │ • loading         │    │ • taskUpdates$   │    │   reactivity     │    │   │
 │  │  │ • error           │    │ • joinRoom()     │    │ • In-place       │    │   │
 │  │  │ • computed values │    │ • emitTaskUpdate │    │   updates only   │    │   │
-│  │  └────────┬──────────┘    └────────┬─────────┘    │   affected task   │    │   │
-│  │           │                       │              └──────────────────┘    │   │
-│  │           │                       │                                       │   │
-│  │           └───────────────────────┼───────────────────────────────────────┘   │
-│  │                                   │                                           │
-│  └───────────────────────────────────┼───────────────────────────────────────────┘
-│                                      │ WebSocket (Socket.io)
-└──────────────────────────────────────┼───────────────────────────────────────────┘
-                                       │
-┌──────────────────────────────────────┼───────────────────────────────────────────┐
-│                                    SERVER (Node.js + Express)                  │
-│                                       │                                           │
-│  ┌────────────────────────────────────▼────────────────────────────────────┐   │
-│  │                              Socket.io Server                             │   │
-│  │                                                                         │   │
-│  │  • Room-based broadcasting (user:{userId})                              │   │
-│  │  • Multi-tenant isolation - user A never sees user B's events            │   │
-│  └────────────────────────────────────┬────────────────────────────────────┘   │
-│                                       │ emit('task:updated', payload)           │
-│  ┌────────────────────────────────────┴────────────────────────────────────┐   │
-│  │                         ROUTES (Express Router)                         │   │
-│  │                                                                         │   │
-│  │  POST /api/tasks          →  taskController.createTask()                 │   │
-│  │  GET  /api/tasks          →  taskController.getTasks()                   │   │
-│  │  GET  /api/tasks/:id      →  taskController.getTaskById()                │   │
-│  │  GET  /api/health         →  Health check (K8s liveness probe)          │   │
-│  └────────────────────────────────────┬────────────────────────────────────┘   │
-│                                       │                                        │
-│  ┌────────────────────────────────────┴────────────────────────────────────┐   │
-│  │                    CONTROLLER (Non-Blocking Pattern)                     │   │
-│  │                                                                         │   │
-│  │  1. Validate request (Zod schema)                                         │   │
-│  │  2. Save to MongoDB (< 50ms)                                            │   │
-│  │  3. Return 202 Accepted IMMEDIATELY                                      │   │
-│  │  4. Fire-and-forget: processTaskAI()                                     │   │
-│  │                                                                         │   │
-│  │  HTTP: < 100ms response | AI: runs 2-10s in background                   │   │
-│  └────────────────────────────────────┬────────────────────────────────────┘   │
-│                                       │                                        │
-│                          ┌────────────┴────────────┐                          │
-│                          │                         │                          │
-│                          ▼                         ▼                          │
-│  ┌─────────────────────────────────┐  ┌─────────────────────────────────────┐  │
-│  │        DATABASE (MongoDB)        │  │        AI SERVICE (Background)      │  │
-│  │                                 │  │                                     │  │
-│  │  Tasks Collection              │  │  processTaskAI(taskId, desc)         │  │
-│  │                                 │  │                                     │  │
-│  │  Compound Index:               │  │  1. Mark 'processing'               │  │
-│  │  { userId: 1, aiStatus: 1 }    │  │  2. Call Gemini API (JSON Schema)   │  │
-│  │                                 │  │  3. Save subtasks                  │  │
-│  │  • Prevents full collection    │  │  4. Mark 'completed' or 'failed'   │  │
-│  │    scans                        │  │  5. Emit WebSocket update            │  │
-│  │  • O(log n) lookups vs O(n)    │  │                                     │  │
-│  │                                 │  │  Robust error handling - never      │  │
-│  │                                 │  │  crashes application                │  │
-│  └─────────────────────────────────┘  └─────────────────────────────────────┘  │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+│  │  └────────┬──────────┘    └────────┬─────────┘    │   affected task  │    │   │
+│  │           │                        │               └──────────────────┘    │   │
+│  │           │                        │                                         │   │
+│  │           └────────────────────────┼─────────────────────────────────────────┘   │
+│  │                                    │ WebSocket (Socket.io)                     │
+└────────────────────────────────────────┼────────────────────────────────────────────┘
+                                         │
+┌────────────────────────────────────────┼────────────────────────────────────────────┐
+│                                  SERVER (Node.js + Express)                      │
+│                                         │                                           │
+│  ┌──────────────────────────────────────▼──────────────────────────────────────┐   │
+│  │                              Socket.io Server                               │   │
+│  │                                                                            │   │
+│  │  • Room-based broadcasting (user:{userId})                                 │   │
+│  │  • Multi-tenant isolation - user A never sees user B's events               │   │
+│  └──────────────────────────────────────┬──────────────────────────────────────┘   │
+│                                         │ emit('task:updated', payload)           │
+│  ┌──────────────────────────────────────┴──────────────────────────────────────┐   │
+│  │                         ROUTES (Express Router)                             │   │
+│  │                                                                            │   │
+│  │  POST /api/tasks          →  taskController.createTask()                    │   │
+│  │  GET  /api/tasks          →  taskController.getTasks()                       │   │
+│  │  GET  /api/tasks/:id      →  taskController.getTaskById()                    │   │
+│  │  GET  /api/health         →  Health check (K8s liveness probe)              │   │
+│  └──────────────────────────────────────┬──────────────────────────────────────┘   │
+│                                         │                                          │
+│  ┌──────────────────────────────────────┴──────────────────────────────────────┐   │
+│  │                    CONTROLLER (Non-Blocking Pattern)                        │   │
+│  │                                                                            │   │
+│  │  1. Validate request (Zod schema)                                           │   │
+│  │  2. Save to MongoDB (< 50ms)                                               │   │
+│  │  3. Return 202 Accepted IMMEDIATELY                                          │   │
+│  │  4. Fire-and-forget: processTaskAI()                                        │   │
+│  │                                                                            │   │
+│  │  HTTP: < 100ms response | AI: runs 2-10s in background                      │   │
+│  └──────────────────────────────────────┬──────────────────────────────────────┘   │
+│                                         │                                         │
+│                            ┌────────────┴────────────┐                           │
+│                            │                         │                           │
+│                            ▼                         ▼                           │
+│  ┌──────────────────────────────────┐  ┌──────────────────────────────────────┐  │
+│  │        DATABASE (MongoDB)         │  │        AI SERVICE (Background)       │  │
+│  │                                  │  │                                      │  │
+│  │  Tasks Collection               │  │  processTaskAI(taskId, desc)          │  │
+│  │                                  │  │                                      │  │
+│  │  Compound Index:                │  │  1. Mark 'processing'                │  │
+│  │  { userId: 1, aiStatus: 1 }     │  │  2. Call Gemini API (JSON Schema)   │  │
+│  │                                  │  │  3. Save subtasks                   │  │
+│  │  • Prevents full collection      │  │  4. Mark 'completed' or 'failed'    │  │
+│  │    scans                         │  │  5. Emit WebSocket update            │  │
+│  │  • O(log n) lookups vs O(n)     │  │                                      │  │
+│  │                                  │  │  Robust error handling - never       │  │
+│  │                                  │  │  crashes application                 │  │
+│  └──────────────────────────────────┘  └──────────────────────────────────────┘  │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 📁 Project Structure
