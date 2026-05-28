@@ -25,7 +25,13 @@ export interface TaskData {
   updatedAt: Date;
 }
 
+// Allow tests to force in-memory mode
 let useInMemory = false;
+
+// Export for testing
+export const setUseInMemory = (value: boolean): void => {
+  useInMemory = value;
+};
 
 export async function initDatabase(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/smart-task-analytics';
